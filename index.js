@@ -30,14 +30,66 @@ const client = new MongoClient(uri, {
 app.use(express.json());
 app.use(cors());
 
+const verifyFirebaseToken = async (req, res, next) => {
+  const token = req.headers.authorization;
+  // console.log(token);
+  if (!token) {
+    return res.status(401).json({ message: "unauthorized access" });
+  }
+
+  try {
+    const idToken = token.split(' ')[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    // console.log('decoded in the verify ', decoded);
+    req.decoded_email = decoded.email;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "unauthorized access" });
+  }
+
+
+}
 
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+
+    const db = client.db('ticketDB');
+    const usersCollection = db.collection('users');
+    const ticketsCollection = db.collection('tickets');
+
+
+    //users related apis
+
+    app.get('/users/:email/role',verifyFirebaseToken,async(req,res)=>{
+      const email = req.params.email;
+      const query =  { email };
+      const result = await usersCollection.findOne(query);
+      res.send({role: result?.role || 'user'});
+    })
+
+    
+    app.post('/users',async(req,res)=>{
+      const user = req.body;
+      user.role = 'user';
+      user.createdAt = new Date();
+
+      const isUserExists = await usersCollection.findOne({email: user.email});
+
+      if(isUserExists){
+        return res.json({message: 'user already exists'});
+      }
+
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+
+
+    })
+
+      // Connect the client to the server	(optional starting in v4.7)
+      // await client.connect();
+      // Send a ping to confirm a successful connection
+      await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
