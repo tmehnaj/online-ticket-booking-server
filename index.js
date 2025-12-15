@@ -86,8 +86,21 @@ async function run() {
 
 
     //tickets related apis
-    
-    app.post('/tickets', async (req, res) => {
+     app.get('/tickets/vendor',verifyFirebaseToken,verifyVendor, async (req, res) => {
+      const { vendorEmail } = req.query;
+      const query = {};
+      if (vendorEmail) {
+        query.vendorEmail = vendorEmail;
+      }
+
+      const result = await ticketsCollection.find(query).toArray();
+
+      res.send(result);
+
+    })
+
+
+    app.post('/tickets',verifyFirebaseToken, verifyVendor, async (req, res) => {
       const ticket = req.body;
       ticket.status = 'pending';
 
@@ -95,7 +108,13 @@ async function run() {
       res.send(result);
     })
 
+  app.delete('/tickets/:id',async(req,res)=>{
 
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id)};
+    const result = await ticketsCollection.deleteOne(query);
+    res.send(result);
+  })
 
     //users related apis
 
