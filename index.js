@@ -58,8 +58,36 @@ async function run() {
     const usersCollection = db.collection('users');
     const ticketsCollection = db.collection('tickets');
 
+     //admin verify middlewAre
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded_email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+
+      if (!user || user?.role !== 'admin') {
+        return res.status(403).json({ message: 'forbidden access' });
+      }
+
+      next();
+    }
+
+    const verifyVendor = async (req, res, next) => {
+      const email = req.decoded_email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+
+      if (!user || user.role !== 'vendor') {
+        return res.status(403).send({ message: 'forbidden access' });
+      }
+
+      next();
+    }
+
 
     //users related apis
+
+   
 
     app.get('/users/:email/role',verifyFirebaseToken,async(req,res)=>{
       const email = req.params.email;
