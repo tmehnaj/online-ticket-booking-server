@@ -2,7 +2,7 @@ const express = require('express');
 const app = express();
 const cors = require("cors");
 require('dotenv').config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
 
 const serviceAccount = require("./online-ticket-booking-firebase-admin-sdk-.json");
@@ -87,6 +87,24 @@ async function run() {
 
     //users related apis
 
+     app.get('/users', verifyFirebaseToken, async (req, res) => {
+      const search = req.query.searchText;
+      const query = {};
+      if (search) {
+        query.$or = [
+          { displayName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // if(query){
+      //   const cursor = usersCollection.find(query).sort({createdAt: -1}).limit(4);
+      // const result = await cursor.toArray();
+      // }
+      const cursor = usersCollection.find(query).sort({ createdAt: -1 }).limit(4);
+      const result = await cursor.toArray();
+      res.send(result);
+    })
    
 
     app.get('/users/:email/role',verifyFirebaseToken,async(req,res)=>{
@@ -113,6 +131,23 @@ async function run() {
 
 
     })
+
+      app.patch('/users/:id/role', async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const roleInfo = req.body;
+      const update = {
+        $set: {
+          role: roleInfo.role,
+        }
+      }
+
+      const result = await usersCollection.updateOne(query, update);
+      res.send(result);
+
+    })
+
+
 
       // Connect the client to the server	(optional starting in v4.7)
       // await client.connect();
