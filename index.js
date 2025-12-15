@@ -6,6 +6,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
 
 const serviceAccount = require("./online-ticket-booking-firebase-admin-sdk-.json");
+const { populate } = require('dotenv');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
@@ -58,7 +59,7 @@ async function run() {
     const usersCollection = db.collection('users');
     const ticketsCollection = db.collection('tickets');
 
-     //admin verify middlewAre
+    //admin verify middlewAre
 
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded_email;
@@ -86,7 +87,7 @@ async function run() {
 
 
     //tickets related apis
-     app.get('/tickets/vendor',verifyFirebaseToken,verifyVendor, async (req, res) => {
+    app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
       const { vendorEmail } = req.query;
       const query = {};
       if (vendorEmail) {
@@ -99,8 +100,15 @@ async function run() {
 
     })
 
+    app.get('/tickets/admin', verifyFirebaseToken, async (req, res) => {
+      const query = {};
+      const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
+      const result = await cursor.toArray();
+      res.send(result);
+    })
 
-    app.post('/tickets',verifyFirebaseToken, verifyVendor, async (req, res) => {
+
+    app.post('/tickets', verifyFirebaseToken, verifyVendor, async (req, res) => {
       const ticket = req.body;
       ticket.status = 'pending';
 
@@ -108,17 +116,17 @@ async function run() {
       res.send(result);
     })
 
-  app.delete('/tickets/:id',async(req,res)=>{
+    app.delete('/tickets/:id', verifyFirebaseToken, async (req, res) => {
 
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id)};
-    const result = await ticketsCollection.deleteOne(query);
-    res.send(result);
-  })
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await ticketsCollection.deleteOne(query);
+      res.send(result);
+    })
 
     //users related apis
 
-     app.get('/users', verifyFirebaseToken,verifyAdmin, async (req, res) => {
+    app.get('/users', verifyFirebaseToken, verifyAdmin, async (req, res) => {
       const search = req.query.searchText;
       const query = {};
       if (search) {
@@ -137,25 +145,25 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     })
-   
 
-    app.get('/users/:email/role',verifyFirebaseToken,async(req,res)=>{
+
+    app.get('/users/:email/role', verifyFirebaseToken, async (req, res) => {
       const email = req.params.email;
-      const query =  { email };
+      const query = { email };
       const result = await usersCollection.findOne(query);
-      res.send({role: result?.role || 'user'});
+      res.send({ role: result?.role || 'user' });
     })
 
-    
-    app.post('/users',async(req,res)=>{
+
+    app.post('/users', async (req, res) => {
       const user = req.body;
       user.role = 'user';
       user.createdAt = new Date();
 
-      const isUserExists = await usersCollection.findOne({email: user.email});
+      const isUserExists = await usersCollection.findOne({ email: user.email });
 
-      if(isUserExists){
-        return res.json({message: 'user already exists'});
+      if (isUserExists) {
+        return res.json({ message: 'user already exists' });
       }
 
       const result = await usersCollection.insertOne(user);
@@ -164,7 +172,7 @@ async function run() {
 
     })
 
-      app.patch('/users/:id/role',verifyFirebaseToken,verifyAdmin, async (req, res) => {
+    app.patch('/users/:id/role', verifyFirebaseToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const roleInfo = req.body;
@@ -181,10 +189,10 @@ async function run() {
 
 
 
-      // Connect the client to the server	(optional starting in v4.7)
-      // await client.connect();
-      // Send a ping to confirm a successful connection
-      await client.db("admin").command({ ping: 1 });
+    // Connect the client to the server	(optional starting in v4.7)
+    // await client.connect();
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
