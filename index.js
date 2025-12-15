@@ -85,9 +85,21 @@ async function run() {
     }
 
 
+    //tickets related apis
+    
+    app.post('/tickets', async (req, res) => {
+      const ticket = req.body;
+      ticket.status = 'pending';
+
+      const result = await ticketsCollection.insertOne(ticket);
+      res.send(result);
+    })
+
+
+
     //users related apis
 
-     app.get('/users', verifyFirebaseToken, async (req, res) => {
+     app.get('/users', verifyFirebaseToken,verifyAdmin, async (req, res) => {
       const search = req.query.searchText;
       const query = {};
       if (search) {
@@ -101,7 +113,8 @@ async function run() {
       //   const cursor = usersCollection.find(query).sort({createdAt: -1}).limit(4);
       // const result = await cursor.toArray();
       // }
-      const cursor = usersCollection.find(query).sort({ createdAt: -1 }).limit(4);
+      // const cursor = usersCollection.find(query).sort({ createdAt: -1 }).limit(4);
+      const cursor = usersCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
     })
@@ -132,7 +145,7 @@ async function run() {
 
     })
 
-      app.patch('/users/:id/role', async (req, res) => {
+      app.patch('/users/:id/role',verifyFirebaseToken,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const roleInfo = req.body;
