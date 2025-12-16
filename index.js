@@ -93,15 +93,21 @@ async function run() {
       if (vendorEmail) {
         query.vendorEmail = vendorEmail;
       }
+     
 
-      const result = await ticketsCollection.find(query).toArray();
+      const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
+      const result = await cursor.toArray();
 
       res.send(result);
 
     })
 
     app.get('/tickets/admin', verifyFirebaseToken, async (req, res) => {
+      const { status } = req.query;
       const query = {};
+      if(status){
+        query.status = status;
+      }
       const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
@@ -114,6 +120,21 @@ async function run() {
 
       const result = await ticketsCollection.insertOne(ticket);
       res.send(result);
+    })
+
+    app.patch('/tickets/:id',verifyFirebaseToken,verifyAdmin,async(req,res)=>{
+      const id = req.params.id;
+      const {status} = req.body;
+      const query = {_id: new ObjectId(id)};
+      const update = {
+        $set:{
+          status: status,
+        }
+      }
+      
+      const result = await ticketsCollection.updateOne(query,update);
+      res.send(result);
+
     })
 
     app.delete('/tickets/:id', verifyFirebaseToken, async (req, res) => {
