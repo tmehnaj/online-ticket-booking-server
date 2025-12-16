@@ -102,11 +102,23 @@ async function run() {
 
     })
 
-    app.get('/tickets/admin', verifyFirebaseToken, async (req, res) => {
+    app.get('/tickets/admin', verifyFirebaseToken,verifyAdmin, async (req, res) => {
       const { status } = req.query;
       const query = {};
       if(status){
         query.status = status;
+      }
+      const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+
+
+      app.get('/tickets/advertise', async (req, res) => {
+      const { advertiseStatus } = req.query;
+      const query = {};
+      if(advertiseStatus){
+        query.advertiseStatus = advertiseStatus;
       }
       const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
