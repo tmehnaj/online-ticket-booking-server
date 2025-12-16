@@ -124,11 +124,28 @@ async function run() {
 
     app.patch('/tickets/:id',verifyFirebaseToken,verifyAdmin,async(req,res)=>{
       const id = req.params.id;
-      const {status} = req.body;
+      const {status, advertiseStatus} = req.body;
       const query = {_id: new ObjectId(id)};
-      const update = {
+      let update = {
         $set:{
           status: status,
+        }
+      }
+
+      if(status === 'approved' && !advertiseStatus){
+        update = {
+          $set: {
+            status: status,
+            advertiseStatus: 'unadvertise',
+          }
+        }
+      }
+
+      if(status === 'approved' && advertiseStatus){
+          update = {
+          $set: {
+            advertiseStatus: advertiseStatus,
+          }
         }
       }
       
