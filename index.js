@@ -93,7 +93,7 @@ async function run() {
       if (vendorEmail) {
         query.vendorEmail = vendorEmail;
       }
-     
+
 
       const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
@@ -102,10 +102,10 @@ async function run() {
 
     })
 
-    app.get('/tickets/admin', verifyFirebaseToken,verifyAdmin, async (req, res) => {
+    app.get('/tickets/admin', verifyFirebaseToken, verifyAdmin, async (req, res) => {
       const { status } = req.query;
       const query = {};
-      if(status){
+      if (status) {
         query.status = status;
       }
       const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
@@ -113,17 +113,29 @@ async function run() {
       res.send(result);
     })
 
+    app.get('/tickets/all-tickets',verifyFirebaseToken, async (req, res) => {
+      const query = {};
+      const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).toArray();
+      res.send(result);
+    })
 
-      app.get('/tickets/advertise', async (req, res) => {
+    app.get('/tickets/latest', async (req, res) => {
+      const query = {};
+      const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).limit(6).toArray();
+      res.send(result);
+    })
+
+    app.get('/tickets/advertise', async (req, res) => {
       const { advertiseStatus } = req.query;
       const query = {};
-      if(advertiseStatus){
+      if (advertiseStatus) {
         query.advertiseStatus = advertiseStatus;
       }
       const cursor = ticketsCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
     })
+
 
 
     app.post('/tickets', verifyFirebaseToken, verifyVendor, async (req, res) => {
@@ -134,17 +146,17 @@ async function run() {
       res.send(result);
     })
 
-    app.patch('/tickets/:id',verifyFirebaseToken,verifyAdmin,async(req,res)=>{
+    app.patch('/tickets/:id', verifyFirebaseToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
-      const {status, advertiseStatus} = req.body;
-      const query = {_id: new ObjectId(id)};
+      const { status, advertiseStatus } = req.body;
+      const query = { _id: new ObjectId(id) };
       let update = {
-        $set:{
+        $set: {
           status: status,
         }
       }
 
-      if(status === 'approved' && !advertiseStatus){
+      if (status === 'approved' && !advertiseStatus) {
         update = {
           $set: {
             status: status,
@@ -153,15 +165,15 @@ async function run() {
         }
       }
 
-      if(status === 'approved' && advertiseStatus){
-          update = {
+      if (status === 'approved' && advertiseStatus) {
+        update = {
           $set: {
             advertiseStatus: advertiseStatus,
           }
         }
       }
-      
-      const result = await ticketsCollection.updateOne(query,update);
+
+      const result = await ticketsCollection.updateOne(query, update);
       res.send(result);
 
     })
