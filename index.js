@@ -87,11 +87,26 @@ async function run() {
     }
 
     //booking related apis
+ app.get('/bookings/user',verifyFirebaseToken,async(req,res)=>{
+  const { email } = req.query;
+  const query = {};
+  if(email){
+    query.userEmail = email;
+  }
+  const cursor  = bookingsCollection.find(query).sort({createdAt: -1});
+  const result = await cursor.toArray();
+  res.send(result);
+
+ })
+
       app.post('/bookings', verifyFirebaseToken, async (req, res) => {
       const booking = req.body;
+      booking.createdAt = new Date();
       const result = await bookingsCollection.insertOne(booking);
       res.send(result);
     })
+
+    
 
     //tickets related apis
     app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
