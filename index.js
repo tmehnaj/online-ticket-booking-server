@@ -58,6 +58,7 @@ async function run() {
     const db = client.db('ticketDB');
     const usersCollection = db.collection('users');
     const ticketsCollection = db.collection('tickets');
+    const bookingsCollection = db.collection('bookings');
 
     //admin verify middlewAre
 
@@ -85,6 +86,12 @@ async function run() {
       next();
     }
 
+    //booking related apis
+      app.post('/bookings', verifyFirebaseToken, async (req, res) => {
+      const booking = req.body;
+      const result = await bookingsCollection.insertOne(booking);
+      res.send(result);
+    })
 
     //tickets related apis
     app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
