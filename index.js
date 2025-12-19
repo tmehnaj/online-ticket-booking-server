@@ -136,99 +136,57 @@ async function run() {
     });
 
 
+    // Add this inside the run() function
+app.patch('/payment-success', async (req, res) => {
+  const sessionId = req.query.session_id;
 
-    
-    // app.patch("/payment-success", async (req, res) => {
-    //   const sessionId = req.query.session_id;
-    //   const session = await stripe.checkout.sessions.retrieve(sessionId);
-    //   // console.log('session retrieve', session);
-    //   const transactionId = session.payment_intent;
-    //   const query = { transactionId: transactionId }
+  try {
+    // 1. Retrieve the session details from Stripe
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    //   const paymentExist = await paymentCollection.findOne(query);
-    //   console.log(paymentExist);
-    //   if (paymentExist) {
+    if (session.payment_status === 'paid') {
+      const { bookingId, userEmail, vendorEmail } = session.metadata;
 
-    //     return res.send({
-    //       message: 'already exists',
-    //       transactionId,
-    //       trackingId: paymentExist.trackingId,
-    //       customer_email: session.customer_email,
-    //       parcelName: session.metadata.parcelName,
-    //     })
-    //   }
+      // 2. Update the booking status in bookingsCollection
+      const filter = { _id: new ObjectId(bookingId) };
+      const updateDoc = {
+        $set: {
+          bookingStatus: 'paid',
+          transactionId: session.payment_intent, // Stripe's unique transaction ID
+        },
+      };
+      await bookingsCollection.updateOne(filter, updateDoc);
 
-    //   //stop 2times same payment store issue
-    //   // const transactionId = session.payment_intent;
-    //   // const queryForTransactionId = {transactionId: transactionId} ;
-    //   // const isPaymentExists = await paymentCollection.findOne(queryForTransactionId);
-    //   // console.log(isPaymentExists);
+      // 3. Save payment details in paymentCollection
+      const paymentRecord = {
+        bookingId,
+        userEmail,
+        vendorEmail,
+        transactionId: session.payment_intent,
+        amount: session.amount_total / 100, // Convert back to dollars
+        date: new Date(),
+        paymentStatus: 'paid'
+      };
+      await paymentCollection.insertOne(paymentRecord);
 
-    //   // if(isPaymentExists){
-    //   //   return res.send({
-    //   //     message: 'already exists',
-    //   //     trackingId: isPaymentExists.trackingId,
-    //   //     transactionId,
-    //   //   })
-    //   // }
-
-
-
-    //   // const trackingId = generateTrackingId();
-
-    //   if (session.payment_status === 'paid') {
-    //     const id = session.metadata.parcelId;
-    //     const trackingId = session.metadata.trackingId;
-    //     const query = { _id: new ObjectId(id) };
-    //     const update = {
-    //       $set: {
-    //         paymentStatus: 'paid',
-    //         deliveryStatus: 'pending-pickup',
-    //       }
-    //     }
-    //     const result = await parcelCollection.updateOne(query, update);
+      // 4. Send data back to the frontend
+      res.send({
+        transactionId: session.payment_intent,
+        customer_email: session.customer_details.email,
+        bookingTitle: session.line_items?.data[0]?.description || "Ticket",
+        status: 'success'
+      });
+    } else {
+      res.status(400).send({ message: "Payment not verified" });
+    }
+  } catch (error) {
+    console.error("Payment Success Error:", error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
 
 
 
-
-    //     const payment = {
-    //       amount: session.amount_total / 100,
-    //       currency: session.currency,
-    //       customer_email: session.customer_email,
-    //       parcelId: session.metadata.parcelId,
-    //       parcelName: session.metadata.parcelName,
-    //       transactionId: session.payment_intent,
-    //       paymentStatus: session.payment_status,
-    //       trackingId: trackingId,
-    //       paidAt: new Date(),
-    //     }
-
-    //     if (session.payment_status === 'paid') {
-    //       //add tracking
-    //       logTracking(trackingId, 'pending-pickup');
-
-    //       const resultPayment = await paymentCollection.insertOne(payment);
-    //       res.send({
-    //         success: true,
-    //         modifyParcel: result,
-    //         paymentInfo: resultPayment,
-    //         trackingId: trackingId,
-    //         transactionId: session.payment_intent,
-    //         customer_email: session.customer_email,
-    //         parcelName: session.metadata.parcelName,
-    //       });
-    //     }
-
-
-    //   }
-
-    //   //  res.send({success: false});
-    // })
-
-
-    //booking related apis
-  
-  
     app.get('/bookings/user', verifyFirebaseToken, async (req, res) => {
       const { email } = req.query;
       const query = {};
