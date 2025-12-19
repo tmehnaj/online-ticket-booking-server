@@ -4,7 +4,7 @@ const cors = require("cors");
 require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
-
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 const serviceAccount = require("./online-ticket-booking-firebase-admin-sdk-.json");
 const { populate } = require('dotenv');
 
@@ -59,6 +59,7 @@ async function run() {
     const usersCollection = db.collection('users');
     const ticketsCollection = db.collection('tickets');
     const bookingsCollection = db.collection('bookings');
+    const paymentCollection = db.collection('payments');
 
     //admin verify middlewAre
 
@@ -86,20 +87,161 @@ async function run() {
       next();
     }
 
+
+    // payment related apis
+
+    app.post('/payment-checkout-session', async (req, res) => {
+      try {
+        const paymentInfo = req.body;
+
+        // 1. Convert to cents (Stripe requirement)
+        const amount = Math.round(parseFloat(paymentInfo.totalPrice) * 100);
+
+        if (isNaN(amount) || amount <= 0) {
+          return res.status(400).send({ message: "Invalid total price" });
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          // PRE-FILL USER EMAIL HERE
+          customer_email: paymentInfo.userEmail,
+
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              price_data: {
+                currency: 'usd',
+                unit_amount: amount,
+                product_data: {
+                  name: `Ticket for: ${paymentInfo.bookingTitle}`,
+                }
+              },
+              quantity: parseInt(paymentInfo.bookingQuantity) || 1,
+            },
+          ],
+          mode: 'payment',
+          metadata: {
+            bookingId: paymentInfo.bookingId,
+            userEmail: paymentInfo.userEmail,
+            vendorEmail: paymentInfo.vendorEmail,
+          },
+          success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+        });
+
+        res.send({ url: session.url });
+      } catch (error) {
+        // console.error("Stripe Error:", error.message);
+        res.status(500).send({ message: error.message });
+      }
+    });
+
+
+
+    
+    // app.patch("/payment-success", async (req, res) => {
+    //   const sessionId = req.query.session_id;
+    //   const session = await stripe.checkout.sessions.retrieve(sessionId);
+    //   // console.log('session retrieve', session);
+    //   const transactionId = session.payment_intent;
+    //   const query = { transactionId: transactionId }
+
+    //   const paymentExist = await paymentCollection.findOne(query);
+    //   console.log(paymentExist);
+    //   if (paymentExist) {
+
+    //     return res.send({
+    //       message: 'already exists',
+    //       transactionId,
+    //       trackingId: paymentExist.trackingId,
+    //       customer_email: session.customer_email,
+    //       parcelName: session.metadata.parcelName,
+    //     })
+    //   }
+
+    //   //stop 2times same payment store issue
+    //   // const transactionId = session.payment_intent;
+    //   // const queryForTransactionId = {transactionId: transactionId} ;
+    //   // const isPaymentExists = await paymentCollection.findOne(queryForTransactionId);
+    //   // console.log(isPaymentExists);
+
+    //   // if(isPaymentExists){
+    //   //   return res.send({
+    //   //     message: 'already exists',
+    //   //     trackingId: isPaymentExists.trackingId,
+    //   //     transactionId,
+    //   //   })
+    //   // }
+
+
+
+    //   // const trackingId = generateTrackingId();
+
+    //   if (session.payment_status === 'paid') {
+    //     const id = session.metadata.parcelId;
+    //     const trackingId = session.metadata.trackingId;
+    //     const query = { _id: new ObjectId(id) };
+    //     const update = {
+    //       $set: {
+    //         paymentStatus: 'paid',
+    //         deliveryStatus: 'pending-pickup',
+    //       }
+    //     }
+    //     const result = await parcelCollection.updateOne(query, update);
+
+
+
+
+    //     const payment = {
+    //       amount: session.amount_total / 100,
+    //       currency: session.currency,
+    //       customer_email: session.customer_email,
+    //       parcelId: session.metadata.parcelId,
+    //       parcelName: session.metadata.parcelName,
+    //       transactionId: session.payment_intent,
+    //       paymentStatus: session.payment_status,
+    //       trackingId: trackingId,
+    //       paidAt: new Date(),
+    //     }
+
+    //     if (session.payment_status === 'paid') {
+    //       //add tracking
+    //       logTracking(trackingId, 'pending-pickup');
+
+    //       const resultPayment = await paymentCollection.insertOne(payment);
+    //       res.send({
+    //         success: true,
+    //         modifyParcel: result,
+    //         paymentInfo: resultPayment,
+    //         trackingId: trackingId,
+    //         transactionId: session.payment_intent,
+    //         customer_email: session.customer_email,
+    //         parcelName: session.metadata.parcelName,
+    //       });
+    //     }
+
+
+    //   }
+
+    //   //  res.send({success: false});
+    // })
+
+
     //booking related apis
- app.get('/bookings/user',verifyFirebaseToken,async(req,res)=>{
-  const { email } = req.query;
-  const query = {};
-  if(email){
-    query.userEmail = email;
-  }
-  const cursor  = bookingsCollection.find(query).sort({createdAt: -1});
-  const result = await cursor.toArray();
-  res.send(result);
+  
+  
+    app.get('/bookings/user', verifyFirebaseToken, async (req, res) => {
+      const { email } = req.query;
+      const query = {};
+      if (email) {
+        query.userEmail = email;
+      }
+      const cursor = bookingsCollection.find(query).sort({ createdAt: -1 });
+      const result = await cursor.toArray();
+      res.send(result);
 
- })
+    })
 
-  app.get("/bookings/vendor", async (req, res) => {
+    app.get("/bookings/vendor", async (req, res) => {
       const query = {};
       const { vendorEmail } = req.query;
       const { bookingStatus } = req.query;
@@ -117,8 +259,8 @@ async function run() {
     })
 
 
-    app.patch('/bookings/:id',verifyFirebaseToken,verifyVendor,async(req,res)=>{
-          const id = req.params.id;
+    app.patch('/bookings/:id', verifyFirebaseToken, verifyVendor, async (req, res) => {
+      const id = req.params.id;
       const { bookingStatus } = req.body;
       const query = { _id: new ObjectId(id) };
       let update = {
@@ -133,14 +275,14 @@ async function run() {
 
     })
 
-      app.post('/bookings', verifyFirebaseToken, async (req, res) => {
+    app.post('/bookings', verifyFirebaseToken, async (req, res) => {
       const booking = req.body;
       booking.createdAt = new Date();
       const result = await bookingsCollection.insertOne(booking);
       res.send(result);
     })
 
-    
+
 
     //tickets related apis
     app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
@@ -169,7 +311,7 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/tickets/all-tickets',verifyFirebaseToken, async (req, res) => {
+    app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
       const query = {};
       const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).toArray();
       res.send(result);
@@ -191,8 +333,8 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     })
-    
-     app.get('/ticket-details/:id', async (req, res) => {
+
+    app.get('/ticket-details/:id', async (req, res) => {
       const id = req.params.id;
       const result = await ticketsCollection.findOne({ _id: new ObjectId(id) })
       res.send(result)
