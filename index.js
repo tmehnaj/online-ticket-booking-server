@@ -99,6 +99,40 @@ async function run() {
 
  })
 
+  app.get("/bookings/vendor", async (req, res) => {
+      const query = {};
+      const { vendorEmail } = req.query;
+      const { bookingStatus } = req.query;
+      if (vendorEmail) {
+        query.vendorEmail = vendorEmail;
+      }
+
+      if (bookingStatus) {
+        query.bookingStatus = bookingStatus;
+      }
+      const options = { sort: { createdAt: -1 } };
+      const cursor = bookingsCollection.find(query, options);
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+
+
+    app.patch('/bookings/:id',verifyFirebaseToken,verifyVendor,async(req,res)=>{
+          const id = req.params.id;
+      const { bookingStatus } = req.body;
+      const query = { _id: new ObjectId(id) };
+      let update = {
+        $set: {
+          bookingStatus: bookingStatus,
+        }
+      }
+
+      const result = await bookingsCollection.updateOne(query, update);
+      res.send(result);
+
+
+    })
+
       app.post('/bookings', verifyFirebaseToken, async (req, res) => {
       const booking = req.body;
       booking.createdAt = new Date();
