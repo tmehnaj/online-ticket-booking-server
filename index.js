@@ -90,6 +90,24 @@ async function run() {
 
     // payment related apis
 
+    app.get('/payments', verifyFirebaseToken, async (req, res) => {
+      const email = req.query.email;
+      // console.log({ email, decoded_mail: req.decoded_email })
+      const query = {};
+      if (email) {
+        query.userEmail = email;
+        //check email with token email
+        if (email !== req.decoded_email) {
+          return res.status(403).json({ message: 'forbidden access' });
+        }
+
+      }
+
+      const cursor = paymentCollection.find(query).sort({ paidAt: -1 });
+      const result = await cursor.toArray();
+      res.send(result);
+    })
+
     app.post('/payment-checkout-session', async (req, res) => {
       try {
         const paymentInfo = req.body;
