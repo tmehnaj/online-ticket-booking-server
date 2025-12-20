@@ -109,7 +109,7 @@ async function run() {
           line_items: [
             {
               price_data: {
-                currency: 'usd',
+                currency: 'bdt',
                 unit_amount: amount,
                 product_data: {
                   name: `Ticket for: ${paymentInfo.bookingTitle}`,
@@ -121,8 +121,11 @@ async function run() {
           mode: 'payment',
           metadata: {
             bookingId: paymentInfo.bookingId,
+            ticketId: paymentInfo.ticketId,
+            ticketTitle: paymentInfo.ticketTitle,
             userEmail: paymentInfo.userEmail,
             vendorEmail: paymentInfo.vendorEmail,
+            ticketQuantity: paymentInfo.ticketQuantity,
           },
           success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
@@ -143,27 +146,53 @@ app.patch('/payment-success', async (req, res) => {
   try {
     // 1. Retrieve the session details from Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId);
+    //  console.log('session retrieve', session);
+
+
+     const transactionId = session.payment_intent;
+      const query = { transactionId: transactionId }
+
+      const paymentExist = await paymentCollection.findOne(query);
+      // console.log(paymentExist);
+      if (paymentExist) {
+
+        return res.send({
+          message: 'already exists',
+          transactionId,
+        })
+      }
+
 
     if (session.payment_status === 'paid') {
-      const { bookingId, userEmail, vendorEmail } = session.metadata;
-
+      const { bookingId, ticketId, userEmail, vendorEmail, ticketTitle, ticketQuantity } = session.metadata;
+      const quantityToSubtract = parseInt(ticketQuantity);
       // 2. Update the booking status in bookingsCollection
       const filter = { _id: new ObjectId(bookingId) };
       const updateDoc = {
         $set: {
           bookingStatus: 'paid',
-          transactionId: session.payment_intent, // Stripe's unique transaction ID
+          transactionId: session.payment_intent, 
         },
       };
       await bookingsCollection.updateOne(filter, updateDoc);
 
-      // 3. Save payment details in paymentCollection
+//CHANGE AVAILABLE QUANTITY
+if (ticketId) {
+        const updateTicket = await ticketsCollection.updateOne(
+          { _id: new ObjectId(ticketId) },
+          { $inc: { quantity: -quantityToSubtract } } // Decrement stock
+        );
+        // console.log("Stock updated:", updateTicket);
+      }
+
+      
       const paymentRecord = {
+        ticketTitle,
         bookingId,
         userEmail,
         vendorEmail,
         transactionId: session.payment_intent,
-        amount: session.amount_total / 100, // Convert back to dollars
+        amount: session.amount_total / 100, 
         date: new Date(),
         paymentStatus: 'paid'
       };
@@ -173,7 +202,7 @@ app.patch('/payment-success', async (req, res) => {
       res.send({
         transactionId: session.payment_intent,
         customer_email: session.customer_details.email,
-        bookingTitle: session.line_items?.data[0]?.description || "Ticket",
+        ticketTitle: session.line_items?.data[0]?.description || "Ticket",
         status: 'success'
       });
     } else {
