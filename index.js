@@ -5,7 +5,14 @@ require('dotenv').config();
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const admin = require("firebase-admin");
 const stripe = require('stripe')(process.env.STRIPE_SECRET);
-const serviceAccount = require("./online-ticket-booking-firebase-admin-sdk-.json");
+//const serviceAccount = require("./online-ticket-booking-firebase-admin-sdk-.json");
+// const serviceAccount = require("./firebase-admin-key.json");
+
+// const serviceAccount = require("./firebase-admin-key.json");
+
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
+
 const { populate } = require('dotenv');
 
 admin.initializeApp({
@@ -158,79 +165,79 @@ async function run() {
 
 
     // Add this inside the run() function
-app.patch('/payment-success', async (req, res) => {
-  const sessionId = req.query.session_id;
+    app.patch('/payment-success', async (req, res) => {
+      const sessionId = req.query.session_id;
 
-  try {
-    // 1. Retrieve the session details from Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    //  console.log('session retrieve', session);
+      try {
+        // 1. Retrieve the session details from Stripe
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        //  console.log('session retrieve', session);
 
 
-     const transactionId = session.payment_intent;
-      const query = { transactionId: transactionId }
+        const transactionId = session.payment_intent;
+        const query = { transactionId: transactionId }
 
-      const paymentExist = await paymentCollection.findOne(query);
-      // console.log(paymentExist);
-      if (paymentExist) {
+        const paymentExist = await paymentCollection.findOne(query);
+        // console.log(paymentExist);
+        if (paymentExist) {
 
-        return res.send({
-          message: 'already exists',
-          transactionId,
-        })
+          return res.send({
+            message: 'already exists',
+            transactionId,
+          })
+        }
+
+
+        if (session.payment_status === 'paid') {
+          const { bookingId, ticketId, userEmail, vendorEmail, ticketTitle, ticketQuantity } = session.metadata;
+          const quantityToSubtract = parseInt(ticketQuantity);
+          // 2. Update the booking status in bookingsCollection
+          const filter = { _id: new ObjectId(bookingId) };
+          const updateDoc = {
+            $set: {
+              bookingStatus: 'paid',
+              transactionId: session.payment_intent,
+            },
+          };
+          await bookingsCollection.updateOne(filter, updateDoc);
+
+          //CHANGE AVAILABLE QUANTITY
+          if (ticketId) {
+            const updateTicket = await ticketsCollection.updateOne(
+              { _id: new ObjectId(ticketId) },
+              { $inc: { quantity: -quantityToSubtract } } // Decrement stock
+            );
+            // console.log("Stock updated:", updateTicket);
+          }
+
+
+          const paymentRecord = {
+            ticketTitle,
+            bookingId,
+            userEmail,
+            vendorEmail,
+            transactionId: session.payment_intent,
+            amount: session.amount_total / 100,
+            date: new Date(),
+            paymentStatus: 'paid'
+          };
+          await paymentCollection.insertOne(paymentRecord);
+
+          // 4. Send data back to the frontend
+          res.send({
+            transactionId: session.payment_intent,
+            customer_email: session.customer_details.email,
+            ticketTitle: session.line_items?.data[0]?.description || "Ticket",
+            status: 'success'
+          });
+        } else {
+          res.status(400).send({ message: "Payment not verified" });
+        }
+      } catch (error) {
+        //console.error("Payment Success Error:", error);
+        res.status(500).send({ message: "Internal Server Error" });
       }
-
-
-    if (session.payment_status === 'paid') {
-      const { bookingId, ticketId, userEmail, vendorEmail, ticketTitle, ticketQuantity } = session.metadata;
-      const quantityToSubtract = parseInt(ticketQuantity);
-      // 2. Update the booking status in bookingsCollection
-      const filter = { _id: new ObjectId(bookingId) };
-      const updateDoc = {
-        $set: {
-          bookingStatus: 'paid',
-          transactionId: session.payment_intent, 
-        },
-      };
-      await bookingsCollection.updateOne(filter, updateDoc);
-
-//CHANGE AVAILABLE QUANTITY
-if (ticketId) {
-        const updateTicket = await ticketsCollection.updateOne(
-          { _id: new ObjectId(ticketId) },
-          { $inc: { quantity: -quantityToSubtract } } // Decrement stock
-        );
-        // console.log("Stock updated:", updateTicket);
-      }
-
-      
-      const paymentRecord = {
-        ticketTitle,
-        bookingId,
-        userEmail,
-        vendorEmail,
-        transactionId: session.payment_intent,
-        amount: session.amount_total / 100, 
-        date: new Date(),
-        paymentStatus: 'paid'
-      };
-      await paymentCollection.insertOne(paymentRecord);
-
-      // 4. Send data back to the frontend
-      res.send({
-        transactionId: session.payment_intent,
-        customer_email: session.customer_details.email,
-        ticketTitle: session.line_items?.data[0]?.description || "Ticket",
-        status: 'success'
-      });
-    } else {
-      res.status(400).send({ message: "Payment not verified" });
-    }
-  } catch (error) {
-    console.error("Payment Success Error:", error);
-    res.status(500).send({ message: "Internal Server Error" });
-  }
-});
+    });
 
 
 
@@ -290,6 +297,8 @@ if (ticketId) {
 
 
     //tickets related apis
+
+
     app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
       const { vendorEmail } = req.query;
       const query = {};
@@ -462,8 +471,8 @@ if (ticketId) {
     // Connect the client to the server	(optional starting in v4.7)
     // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
