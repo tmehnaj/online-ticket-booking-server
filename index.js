@@ -381,7 +381,7 @@ async function run() {
         });
 
       } catch (error) {
-        console.error("Backend Error:", error);
+        // console.error("Backend Error:", error);
         res.status(500).json({ success: false, error: "Internal Server Error" });
       }
     });
