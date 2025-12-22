@@ -294,101 +294,100 @@ async function run() {
       res.send(result);
     })
 
+    //vendor stats
+
+    app.get('/vendor-revenue-stats', verifyFirebaseToken, verifyVendor, async (req, res) => {
+      const email = req.decoded_email;
+
+      try {
+        // Summary Stats
+        const paymentStats = await paymentCollection.aggregate([
+          { $match: { vendorEmail: email } },
+          { $group: { _id: null, totalRevenue: { $sum: "$amount" }, totalSold: { $sum: 1 } } }
+        ]).toArray();
+
+        // Inventory Stats for Pie Chart
+        const inventory = await ticketsCollection.aggregate([
+          { $match: { vendorEmail: email } },
+          { $group: { _id: null, totalAvailable: { $sum: "$quantity" } } }
+        ]).toArray();
+
+        const totalSold = paymentStats[0]?.totalSold || 0;
+        const totalAvailable = inventory[0]?.totalAvailable || 0;
+
+        // Data specifically formatted for the Pie Chart
+        const pieData = [
+          { name: 'Tickets Sold', value: totalSold },
+          { name: 'Remaining Stock', value: totalAvailable }
+        ];
+
+        res.send({
+          summary: {
+            totalRevenue: paymentStats[0]?.totalRevenue || 0,
+            totalTicketsSold: totalSold,
+            totalTicketsAdded: totalSold + totalAvailable
+          },
+          pieData
+        });
+      } catch (error) {
+        res.status(500).send({ message: "Server Error" });
+      }
+    });
+
 
 
     //tickets related apis
 
-    //     app.get("/apps", async (req, res) => {
-    //   try {
-    //     const {
-    //       limit = 0,
-    //       skip = 0,
-    //       sort = "price",
-    //       order = "desc",
-    //       search = "",
-    //     } = req.query;
-    //     console.log(limit, sort, order, search);
-
-    //     const sortOption = {};
-
-    //     let query = {};
-
-    //     if (search) {
-    //       query.title = { $regex: search, $options: "i" };
-    //     }
-    //     console.log(query);
-
-    //     sortOption[sort || "price"] = order === "asc" ? 1 : -1;
-    //     console.log(sortOption);
-
-    //     const tickets = await ticketsCollection
-    //       .find(query)
-    //       .sort(sortOption)
-    //       .limit(Number(limit))
-    //       .skip(Number(skip))
-    //       .project({ description: 0, ratings: 0 })
-    //       .toArray();
-
-    //     const count = await ticketsCollection.countDocuments(query);
-
-    //     res.send({ tickets, total: count });
-    //   } catch (error) {
-    //     console.log(error);
-    //     res.status(500).json({ error: "Internal Server Error" });
-    //   }
-    // });
-
-
     app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
-  try {
-    const { limit = 9, skip = 0, sort = "price", order = "asc", search = "", type = "" } = req.query;
+      try {
+        const { limit = 9, skip = 0, sort = "price", order = "asc", search = "", type = "" } = req.query;
 
-    // 1. Build Query
-    let query = { status: 'approved' }; // Matches your data "status": "approved"
+        // 1. Build Query
+        let query = { status: 'approved' }; // Matches your data "status": "approved"
 
-    // Search by origin or destination (matches your data keys)
-    if (search) {
-      query.$or = [
-        { origin: { $regex: search, $options: "i" } },
-        { destination: { $regex: search, $options: "i" } },
-        { title: { $regex: search, $options: "i" } }
-      ];
-    }
+        // Search by origin or destination (matches your data keys)
+        if (search) {
+          query.$or = [
+            { origin: { $regex: search, $options: "i" } },
+            { destination: { $regex: search, $options: "i" } },
+            { title: { $regex: search, $options: "i" } }
+          ];
+        }
 
-    // Filter by transportType (matches your data "transportType": "Launch")
-    if (type) {
-      query.transportType = type;
-    }
+        // Filter by transportType (matches your data "transportType": "Launch")
+        if (type) {
+          query.transportType = type;
+        }
 
-    // 2. Build Sort
-    const sortOption = {};
-    sortOption[sort] = order === "desc" ? -1 : 1;
+        // 2. Build Sort
+        const sortOption = {};
+        sortOption[sort] = order === "desc" ? -1 : 1;
 
-    // 3. Execute Database Calls
-    const tickets = await ticketsCollection
-      .find(query)
-      .sort(sortOption)
-      .skip(parseInt(skip))
-      .limit(parseInt(limit))
-      .toArray();
+        // 3. Execute Database Calls
+        const tickets = await ticketsCollection
+          .find(query)
+          .sort(sortOption)
+          .skip(parseInt(skip))
+          .limit(parseInt(limit))
+          .toArray();
 
-    const totalCount = await ticketsCollection.countDocuments(query);
+        const totalCount = await ticketsCollection.countDocuments(query);
 
-    // 4. Send Clean Response
-    res.send({ 
-      success: true,
-      tickets, 
-      totalCount 
+        // 4. Send Clean Response
+        res.send({
+          success: true,
+          tickets,
+          totalCount
+        });
+
+      } catch (error) {
+        console.error("Backend Error:", error);
+        res.status(500).json({ success: false, error: "Internal Server Error" });
+      }
     });
 
-  } catch (error) {
-    console.error("Backend Error:", error);
-    res.status(500).json({ success: false, error: "Internal Server Error" });
-  }
-});
 
 
-   
 
 
     app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
@@ -417,11 +416,7 @@ async function run() {
       res.send(result);
     })
 
-    // app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
-    //   const query = {};
-    //   const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).toArray();
-    //   res.send(result);
-    // })
+
 
     app.get('/tickets/latest', async (req, res) => {
       const query = {};
@@ -485,6 +480,17 @@ async function run() {
       const result = await ticketsCollection.updateOne(query, update);
       res.send(result);
 
+    })
+
+    app.put('/tickets/:id', verifyFirebaseToken, verifyVendor, async (req, res) => {
+      const id = req.params.id;
+      const updateTicket = req.body;
+      const query = { _id: new ObjectId(id) };
+      const update = {
+        $set: updateTicket,
+      }
+      const result = await ticketsCollection.updateOne(query, update);
+      res.send(result);
     })
 
     app.delete('/tickets/:id', verifyFirebaseToken, async (req, res) => {
