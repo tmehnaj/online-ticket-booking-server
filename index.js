@@ -298,6 +298,98 @@ async function run() {
 
     //tickets related apis
 
+    //     app.get("/apps", async (req, res) => {
+    //   try {
+    //     const {
+    //       limit = 0,
+    //       skip = 0,
+    //       sort = "price",
+    //       order = "desc",
+    //       search = "",
+    //     } = req.query;
+    //     console.log(limit, sort, order, search);
+
+    //     const sortOption = {};
+
+    //     let query = {};
+
+    //     if (search) {
+    //       query.title = { $regex: search, $options: "i" };
+    //     }
+    //     console.log(query);
+
+    //     sortOption[sort || "price"] = order === "asc" ? 1 : -1;
+    //     console.log(sortOption);
+
+    //     const tickets = await ticketsCollection
+    //       .find(query)
+    //       .sort(sortOption)
+    //       .limit(Number(limit))
+    //       .skip(Number(skip))
+    //       .project({ description: 0, ratings: 0 })
+    //       .toArray();
+
+    //     const count = await ticketsCollection.countDocuments(query);
+
+    //     res.send({ tickets, total: count });
+    //   } catch (error) {
+    //     console.log(error);
+    //     res.status(500).json({ error: "Internal Server Error" });
+    //   }
+    // });
+
+
+    app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
+  try {
+    const { limit = 9, skip = 0, sort = "price", order = "asc", search = "", type = "" } = req.query;
+
+    // 1. Build Query
+    let query = { status: 'approved' }; // Matches your data "status": "approved"
+
+    // Search by origin or destination (matches your data keys)
+    if (search) {
+      query.$or = [
+        { origin: { $regex: search, $options: "i" } },
+        { destination: { $regex: search, $options: "i" } },
+        { title: { $regex: search, $options: "i" } }
+      ];
+    }
+
+    // Filter by transportType (matches your data "transportType": "Launch")
+    if (type) {
+      query.transportType = type;
+    }
+
+    // 2. Build Sort
+    const sortOption = {};
+    sortOption[sort] = order === "desc" ? -1 : 1;
+
+    // 3. Execute Database Calls
+    const tickets = await ticketsCollection
+      .find(query)
+      .sort(sortOption)
+      .skip(parseInt(skip))
+      .limit(parseInt(limit))
+      .toArray();
+
+    const totalCount = await ticketsCollection.countDocuments(query);
+
+    // 4. Send Clean Response
+    res.send({ 
+      success: true,
+      tickets, 
+      totalCount 
+    });
+
+  } catch (error) {
+    console.error("Backend Error:", error);
+    res.status(500).json({ success: false, error: "Internal Server Error" });
+  }
+});
+
+
+   
+
 
     app.get('/tickets/vendor', verifyFirebaseToken, verifyVendor, async (req, res) => {
       const { vendorEmail } = req.query;
@@ -325,11 +417,11 @@ async function run() {
       res.send(result);
     })
 
-    app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
-      const query = {};
-      const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).toArray();
-      res.send(result);
-    })
+    // app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
+    //   const query = {};
+    //   const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).toArray();
+    //   res.send(result);
+    // })
 
     app.get('/tickets/latest', async (req, res) => {
       const query = {};
