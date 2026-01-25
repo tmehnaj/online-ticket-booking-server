@@ -338,14 +338,12 @@ async function run() {
 
     //tickets related apis
 
-    app.get('/tickets/all-tickets', verifyFirebaseToken, async (req, res) => {
+    app.get('/tickets/all-tickets', async (req, res) => {
       try {
         const { limit = 9, skip = 0, sort = "price", order = "asc", search = "", type = "" } = req.query;
 
-        // 1. Build Query
-        let query = { status: 'approved' }; // Matches your data "status": "approved"
+        let query = { status: 'approved' }; 
 
-        // Search by origin or destination (matches your data keys)
         if (search) {
           query.$or = [
             { origin: { $regex: search, $options: "i" } },
@@ -354,7 +352,6 @@ async function run() {
           ];
         }
 
-        // Filter by transportType (matches your data "transportType": "Launch")
         if (type) {
           query.transportType = type;
         }
@@ -420,7 +417,7 @@ async function run() {
 
     app.get('/tickets/latest', async (req, res) => {
       const query = {};
-      const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).limit(6).toArray();
+      const result = await ticketsCollection.find(query).sort({ createdAt: -1 }).limit(8).toArray();
       res.send(result);
     })
 
